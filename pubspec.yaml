@@ -1,0 +1,42 @@
+name: auth_app_ui
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.3
+
+dependencies:
+  # Cần khai báo SDK Flutter tại đây
+  
+  http: ^1.1.0
+  flutter:
+    sdk: flutter 
+
+  # Thêm các dependencies khác (như http, provider) nếu cần
+  # ...
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+# --- LỖI ĐƯỢC SỬA TẠI ĐÂY ---
+# Phần cấu hình assets/fonts/icon phải nằm dưới key 'flutter:' chính
+flutter:
+  # Dòng này đảm bảo Material Icons được đưa vào
+  uses-material-design: true
+
+  # Cấu hình Font custom
+  fonts:
+    # Font 'Plus Jakarta Sans' được sử dụng trong HTML của bạn
+    - family: Plus Jakarta Sans # Tên font dùng trong code Dart
+      fonts:
+        - asset: assets\fonts\PlusJakartaSans-Regular.ttf
+          weight: 400
+        - asset: assets\fonts\PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets\fonts\PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets\fonts\PlusJakartaSans-Bold.ttf
+          weight: 700
