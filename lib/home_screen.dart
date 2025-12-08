@@ -10,6 +10,19 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+
+    // Index 3 tương ứng với mục "Tài khoản"
+    if (index == 3) { 
+      // Chuyển hướng đến màn hình Profile
+      Navigator.of(context).pushNamed('/profile');
+    } 
+    // Nếu index là 0, 1, 2 thì bạn sẽ xử lý chuyển đổi nội dung Body tại đây
+  }
+
   @override
   Widget build(BuildContext context) {
     // Lấy màu chủ đạo từ Theme

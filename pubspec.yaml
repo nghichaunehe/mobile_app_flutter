@@ -12,6 +12,7 @@ dependencies:
   http: ^1.1.0
   flutter:
     sdk: flutter 
+  flutter_secure_storage: ^9.0.0
 
   # Thêm các dependencies khác (như http, provider) nếu cần
   # ...
