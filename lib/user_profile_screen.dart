@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'secure_storage_manager.dart';
 void main() {
   runApp(const MyApp());
 }
@@ -23,6 +23,36 @@ class MyApp extends StatelessWidget {
   }
 }
 
+Future<void> _handleLogout(BuildContext context) async {
+  // Hiện hộp thoại xác nhận
+  final bool shouldLogout = await showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Đăng xuất"),
+      content: const Text("Bạn có chắc chắn muốn đăng xuất?"),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text("Hủy"),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text("Đồng ý", style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  ) ?? false;
+
+  if (shouldLogout) {
+    // Xóa JWT khỏi bộ nhớ an toàn
+    await SecureStorageManager.deleteJwt();
+
+    // Chuyển về màn hình Login và xóa hết lịch sử cũ
+    if (!context.mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+  }
+}
+
 class UserProfileScreen extends StatelessWidget {
   const UserProfileScreen({super.key});
 
@@ -37,7 +67,7 @@ class UserProfileScreen extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black87),
-          onPressed: () {},
+          onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
         title: const Text(
@@ -186,6 +216,7 @@ class UserProfileScreen extends StatelessWidget {
                       iconBgColor: Colors.grey.shade200,
                       showChevron: false,
                       isLast: true,
+                      onTap: () => _handleLogout(context),
                     ),
                   ],
                 ),
@@ -209,14 +240,15 @@ class UserProfileScreen extends StatelessWidget {
     required String text,
     required Color iconColor,
     required Color iconBgColor,
-    Color textColor = const Color(0xFF1E293B), // slate-800
+    Color textColor = const Color(0xFF1E293B),
     bool showChevron = true,
     bool isLast = false,
+    VoidCallback? onTap,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: onTap,
         borderRadius: isLast 
             ? const BorderRadius.vertical(bottom: Radius.circular(12))
             : null, // Bo góc khi nhấn nếu là item cuối

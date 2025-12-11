@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:convert'; // Để dùng jsonEncode, jsonDecode
 import 'package:http/http.dart' as http; // Để gọi API
 import 'home_screen.dart'; // import Home Page
+import 'package:shared_preferences/shared_preferences.dart';
+
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -19,27 +21,22 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  // --- CẤU HÌNH API ---
-  // LƯU Ý QUAN TRỌNG:
-  // - Nếu chạy trên iOS Simulator: dùng "http://localhost:3001"
-  // - Nếu chạy trên Android Emulator: dùng "http://10.0.2.2:3001" (thay vì localhost)
-  // - Nếu chạy trên máy thật: dùng IP LAN của máy tính (VD: "http://192.168.1.x:3001")
-  final String _baseUrl = "http://localhost:3001"; 
-  // final String _baseUrl = "http://10.0.2.2:3001"; // Bật dòng này nếu dùng Android Emulator
 
-  // Hàm xử lý logic đăng nhập/đăng ký
+  final String _baseUrl = "http://localhost:3001"; 
+
   Future<void> _handleAuth() async {
-    FocusScope.of(context).unfocus(); // Ẩn bàn phím
+    FocusScope.of(context).unfocus();
 
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
     setState(() {
-      _isLoading = true; // Bắt đầu xoay vòng loading
+      _isLoading = true;
     });
 
     final endpoint = isLogin ? '/auth/login' : '/auth/register';
+
     final url = Uri.parse('$_baseUrl$endpoint');
 
     final Map<String, String> body = {
@@ -48,35 +45,44 @@ class _AuthScreenState extends State<AuthScreen> {
     };
 
     try {
-      print("Đang gọi API: $url");
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
       );
 
-      print("Status Code: ${response.statusCode}");
-      print("Body: ${response.body}");
-
       final responseData = jsonDecode(response.body);
 
-      if (response.statusCode == 200) {
-        // --- THÀNH CÔNG ---
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        
+        final prefs = await SharedPreferences.getInstance();
+        
+        String? token = responseData['access_token']; 
+        
+        if (token != null) {
+          await prefs.setString('access_token', token);
+          print("Đã lưu Token: $token");
+        }
+        
+        if (responseData['userId'] != null) {
+           await prefs.setString('userId', responseData['userId'].toString());
+        }
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(responseData['message'] ?? (isLogin ? "Đăng nhập thành công!" : "Đăng ký thành công!")),
+              content: Text(isLogin ? "Đăng nhập thành công!" : "Đăng ký thành công!"),
               backgroundColor: Colors.green,
             ),
           );
           
           Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
-            );
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
         }
       } else {
-        // --- LỖI TỪ SERVER (VD: Sai pass, email trùng...) ---
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -87,20 +93,17 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       }
     } catch (e) {
-      // --- LỖI KẾT NỐI (Server tắt, sai IP...) ---
-      print("Lỗi kết nối: $e");
-      if (mounted) {
+      // ... Xử lý lỗi kết nối như cũ
+      print("Lỗi: $e");
+       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Lỗi kết nối đến Server. Kiểm tra lại Backend."),
-            backgroundColor: Colors.red,
-          ),
+          const SnackBar(content: Text("Lỗi kết nối Server"), backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) {
         setState(() {
-          _isLoading = false; // Tắt loading dù thành công hay thất bại
+          _isLoading = false;
         });
       }
     }
