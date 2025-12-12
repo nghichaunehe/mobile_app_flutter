@@ -58,7 +58,8 @@ class _AuthScreenState extends State<AuthScreen> {
         final prefs = await SharedPreferences.getInstance();
         
         String? token = responseData['access_token']; 
-        
+        String? refreshToken = responseData['refresh_token'];
+
         if (token != null) {
           await prefs.setString('access_token', token);
           print("Đã lưu Token: $token");
@@ -66,6 +67,10 @@ class _AuthScreenState extends State<AuthScreen> {
         
         if (responseData['userId'] != null) {
            await prefs.setString('userId', responseData['userId'].toString());
+        }
+
+        if (responseData['userId'] != null) {
+          await prefs.setString('userId', responseData['userId'].toString());
         }
 
         if (mounted) {

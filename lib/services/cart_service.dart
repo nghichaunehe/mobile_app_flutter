@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class CartItemModel {
   final int id;
-  final int quantity;
+  int quantity;
   final String? size;
   final String? color;
   final ProductModel product;

@@ -13,6 +13,9 @@ class _CartScreenState extends State<CartScreen> {
   final CartService _cartService = CartService();
   CartResponse? _cartData;
   bool _isLoading = true;
+  
+  // UPDATE 1: Biến lưu các ID của item đang được tick chọn
+  final Set<int> _selectedItemIds = {}; 
 
   @override
   void initState() {
@@ -20,21 +23,64 @@ class _CartScreenState extends State<CartScreen> {
     _fetchCartData();
   }
 
-  // Hàm gọi API lấy dữ liệu
   Future<void> _fetchCartData() async {
     setState(() => _isLoading = true);
     final data = await _cartService.getCart();
+    
     setState(() {
       _cartData = data;
       _isLoading = false;
+      // UPDATE 2: Mặc định khi load xong thì chọn tất cả (hoặc không chọn tùy em)
+      if (_cartData != null) {
+        _selectedItemIds.clear();
+        for (var item in _cartData!.items) {
+          _selectedItemIds.add(item.id);
+        }
+      }
     });
   }
 
-  // Hàm xóa item
+  // UPDATE 3: Hàm tính tổng tiền dựa trên các item ĐƯỢC CHỌN
+  double _calculateTotal() {
+    if (_cartData == null) return 0;
+    double total = 0;
+    for (var item in _cartData!.items) {
+      if (_selectedItemIds.contains(item.id)) {
+        total += item.product.price * item.quantity;
+      }
+    }
+    return total;
+  }
+
+  // UPDATE 4: Logic tăng giảm số lượng
+  Future<void> _updateQuantity(int cartItemId, int change) async {
+    if (_cartData == null) return;
+    
+    // Tìm item trong list local
+    final index = _cartData!.items.indexWhere((element) => element.id == cartItemId);
+    if (index == -1) return;
+
+    final currentItem = _cartData!.items[index];
+    final newQuantity = currentItem.quantity + change;
+
+    // Không cho giảm dưới 1
+    if (newQuantity < 1) return;
+
+    // TODO: Gọi API update số lượng lên Server ở đây
+    // await _cartService.updateQuantity(cartItemId, newQuantity);
+
+    // Cập nhật UI Local ngay lập tức
+    setState(() {
+      _cartData!.items[index].quantity = newQuantity;
+    });
+  }
+
   Future<void> _removeItem(int cartItemId) async {
     bool success = await _cartService.removeCartItem(cartItemId);
     if (success) {
-      _fetchCartData(); // Load lại danh sách sau khi xóa
+      // Xóa xong thì bỏ chọn nó khỏi list selected luôn
+      _selectedItemIds.remove(cartItemId); 
+      _fetchCartData();
     }
   }
 
@@ -52,8 +98,6 @@ class _CartScreenState extends State<CartScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        backgroundColor: backgroundLight.withOpacity(0.8),
-        elevation: 0.5,
       ),
       
       body: _isLoading
@@ -69,7 +113,6 @@ class _CartScreenState extends State<CartScreen> {
                         padding: const EdgeInsets.all(16.0),
                         child: Column(
                           children: [
-                            // Render list items từ API
                             ..._cartData!.items.map((item) {
                               return Column(
                                 children: [
@@ -83,14 +126,12 @@ class _CartScreenState extends State<CartScreen> {
                                 ],
                               );
                             }).toList(),
-
-                            const SizedBox(height: 150), // Khoảng đệm cho Footer
+                            const SizedBox(height: 150),
                           ],
                         ),
                       ),
                     ),
                     
-                    // Footer tính tổng tiền
                     _buildCartFooter(context, primaryColor, backgroundLight, currencyFormatter),
                   ],
                 ),
@@ -99,91 +140,119 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildCartItem(
       BuildContext context,
-      CartItemModel item, // Nhận vào Model
+      CartItemModel item, 
       NumberFormat formatter,
       Color primaryColor) {
     
-    // Xử lý ảnh: Check base64 hay url
     Widget imageWidget;
     if (item.product.imageBase64 != null && item.product.imageBase64!.startsWith('http')) {
        imageWidget = Image.network(item.product.imageBase64!, fit: BoxFit.cover);
     } else {
-       // Nếu là base64 thật sự hoặc placeholder
        imageWidget = const Icon(Icons.image, size: 40, color: Colors.grey);
-       // TODO: Nếu BE trả base64 raw string thì dùng Image.memory(base64Decode(...))
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black12.withOpacity(0.05), blurRadius: 8)],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 96,
-            width: 96,
+    // UPDATE 5: Bọc trong Row để thêm Checkbox
+    return Row(
+      children: [
+        // Checkbox ở đầu
+        Checkbox(
+          activeColor: primaryColor,
+          value: _selectedItemIds.contains(item.id),
+          onChanged: (bool? value) {
+            setState(() {
+              if (value == true) {
+                _selectedItemIds.add(item.id);
+              } else {
+                _selectedItemIds.remove(item.id);
+              }
+            });
+          },
+        ),
+        
+        // Phần hiển thị item cũ
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(12), // Giảm padding chút cho đỡ chật
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.grey[200],
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [BoxShadow(color: Colors.black12.withOpacity(0.05), blurRadius: 8)],
             ),
-            clipBehavior: Clip.hardEdge,
-            child: imageWidget,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.product.name, 
-                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    InkWell(
-                      onTap: () => _removeItem(item.id),
-                      child: const Icon(Icons.delete_outline, size: 24, color: Colors.redAccent),
-                    ),
-                  ],
+                Container(
+                  height: 80, // Giảm size ảnh chút
+                  width: 80,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.grey[200],
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: imageWidget,
                 ),
-                Text("Size: ${item.size ?? '-'}, Màu: ${item.color ?? '-'}", 
-                    style: const TextStyle(fontSize: 14, color: Colors.grey)),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "${formatter.format(double.parse(item.product.price.toString()))}₫", 
-                      style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor)
-                    ),
-                    Row(
-                      children: [
-                        _quantityButton('-'),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                          child: Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.w500)),
-                        ),
-                        _quantityButton('+'),
-                      ],
-                    ),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.product.name, 
+                              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _removeItem(item.id),
+                            child: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                          ),
+                        ],
+                      ),
+                      Text("Size: ${item.size ?? '-'}, Màu: ${item.color ?? '-'}", 
+                          style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "${formatter.format(item.product.price)}₫", 
+                            style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor)
+                          ),
+                          
+                          // UPDATE 6: Logic nút tăng giảm
+                          Row(
+                            children: [
+                              InkWell(
+                                onTap: () => _updateQuantity(item.id, -1),
+                                child: _quantityButton('-'),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                                child: Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.w500)),
+                              ),
+                              InkWell(
+                                onTap: () => _updateQuantity(item.id, 1),
+                                child: _quantityButton('+'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -195,19 +264,18 @@ class _CartScreenState extends State<CartScreen> {
       decoration: BoxDecoration(
         color: Colors.grey[100],
         shape: BoxShape.circle,
+        border: Border.all(color: Colors.grey[300]!) // Thêm viền cho rõ
       ),
       child: Text(text, style: const TextStyle(fontSize: 16)),
     );
   }
 
   Widget _buildCartFooter(BuildContext context, Color primaryColor, Color backgroundLight, NumberFormat formatter) {
-    // Nếu chưa load xong hoặc không có dữ liệu thì hiện 0
-    double total = _cartData?.totalPrice ?? 0;
+    // UPDATE 7: Gọi hàm tính toán mới thay vì lấy total từ API
+    double total = _calculateTotal();
 
     return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
+      bottom: 0, left: 0, right: 0,
       child: Container(
         decoration: BoxDecoration(
           color: backgroundLight.withOpacity(0.95), 
@@ -219,9 +287,7 @@ class _CartScreenState extends State<CartScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  _summaryRow('Tạm tính', "${formatter.format(total)}₫", isTotal: false),
-                  _summaryRow('Phí vận chuyển', 'Miễn phí', isTotal: false),
-                  const SizedBox(height: 8),
+                  _summaryRow('Đã chọn', "${_selectedItemIds.length} sản phẩm", isTotal: false), // Thêm dòng đếm
                   _summaryRow('Tổng cộng', "${formatter.format(total)}₫", isTotal: true, primaryColor: primaryColor),
                 ],
               ),
@@ -229,11 +295,13 @@ class _CartScreenState extends State<CartScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: ElevatedButton(
-                onPressed: () {
-                   // Navigate to Checkout
+                onPressed: _selectedItemIds.isEmpty ? null : () { // Disable nếu không chọn gì
+                    // Navigate to Checkout với danh sách items đã chọn
+                    // Navigator.push Named... arguments: _selectedItemIds
                 }, 
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
+                  disabledBackgroundColor: Colors.grey, // Màu khi disable
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 48),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

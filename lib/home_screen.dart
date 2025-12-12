@@ -6,6 +6,8 @@ import 'package:intl/intl.dart'; // Thư viện format tiền tệ
 import 'category_screen.dart';
 import 'favorite_page.dart';
 
+import 'services/api_service.dart';
+import 'auth_screen.dart';
 // --- 1. Tạo Model để hứng dữ liệu từ API ---
 class Product {
 final int id;
@@ -56,6 +58,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final ApiService _apiService = ApiService();
   int _selectedIndex = 0;
   
   // Biến trạng thái cho việc tải dữ liệu
@@ -68,30 +71,75 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchProducts(); // Gọi API ngay khi màn hình mở
   }
 
+  Future<void> fetchUserProfile() async {
+    try {
+      // Gọi qua apiService thay vì http
+      // Nó sẽ tự động xử lý việc refresh token nếu cần
+      final response = await _apiService.get('/users/profile'); 
+
+      if (response.statusCode == 200) {
+        // Xử lý dữ liệu thành công
+        print("Data: ${response.body}");
+      } else if (response.statusCode == 401) {
+         // Nếu vẫn là 401 sau khi đã cố refresh -> Bắt người dùng đăng nhập lại
+         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => AuthScreen()));
+      }
+    } catch (e) {
+      print("Error: $e");
+    }
+  }
+
   // --- Hàm gọi API ---
   Future<void> _fetchProducts() async {
+    setState(() {
+      _isLoading = true; // Bắt đầu tải
+    });
+    
+    // Đổi endpoint thành chuỗi thay vì Uri.parse toàn bộ
+    const String endpoint = '/products/random'; 
+
     try {
-      // Lưu ý: Nếu chạy trên máy ảo Android, localhost là 10.0.2.2
-      // Nếu chạy Web hoặc iOS Simulator thì dùng localhost vẫn được
-      final url = Uri.parse('http://localhost:3001/products/random'); 
-      
-      final response = await http.get(url);
+      // 1. Sử dụng ApiService để gọi API
+      // ApiService sẽ tự động thêm 'Bearer Token' và xử lý Refresh Token nếu cần
+      final response = await _apiService.get(endpoint);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         setState(() {
           _products = data.map((json) => Product.fromJson(json)).toList();
-          _isLoading = false;
         });
-      } else {
-        throw Exception('Failed to load products');
+      } 
+      // 2. Xử lý trường hợp 401 (Sau khi ApiService đã cố gắng Refresh Token)
+      else if (response.statusCode == 401) {
+        // Token đã hết hạn, và Refresh Token cũng không còn hiệu lực -> Đăng xuất
+        if (mounted) {
+            await _apiService.logout(); // Xóa token khỏi SharedPreferences
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại."), backgroundColor: Colors.orange),
+            );
+            // Chuyển về màn hình đăng nhập
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
+        }
+      }
+      else {
+        // Xử lý các lỗi khác như 404, 500, v.v.
+        final responseData = json.decode(response.body);
+        throw Exception(responseData['message'] ?? 'Failed to load products');
       }
     } catch (e) {
       print("Lỗi gọi API: $e");
-      setState(() {
-        _isLoading = false;
-      });
-      // Có thể hiển thị thông báo lỗi cho user tại đây
+      if (mounted) {
+         // Hiển thị lỗi kết nối nếu không phải 401 đã được xử lý
+         ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text("Lỗi kết nối hoặc API: $e"), backgroundColor: Colors.red),
+         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -188,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Format giá tiền: 250 -> 250.000₫
           final currencyFormatter = NumberFormat('#,###', 'vi_VN');
           // Giả sử API trả về 250 tức là 250.000 VND
-          final formattedPrice = "${currencyFormatter.format(product.price * 1000)}₫";
+          final formattedPrice = "${currencyFormatter.format(product.price)}₫";
 
           return GestureDetector(
             onTap: () => Navigator.pushNamed(context, '/detail', arguments: product),
