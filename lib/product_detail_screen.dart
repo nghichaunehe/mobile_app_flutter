@@ -23,7 +23,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     
     // Format tiền tệ
     final currencyFormatter = NumberFormat('#,###', 'vi_VN');
-    final formattedPrice = "${currencyFormatter.format(product.price * 1000)}₫";
+    final formattedPrice = "${currencyFormatter.format(product.price)}₫";
 
     return Scaffold(
       body: Stack(
