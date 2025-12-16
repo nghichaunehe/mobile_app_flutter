@@ -147,13 +147,13 @@ class CartService {
         "cartItemId": cartItemId
       });
 
-      // API backend dùng @Delete('remove') với @Body, 
-      // nhưng chuẩn RESTful DELETE thường không có Body. 
+      // API backend dùng @Delete('remove') với @Body,
+      // nhưng chuẩn RESTful DELETE thường không có Body.
       // Flutter http.delete có hỗ trợ body nhưng cẩn thận server config.
       final request = http.Request('DELETE', Uri.parse('$baseUrl/remove'));
       request.headers.addAll(headers);
       request.body = body;
-      
+
       final response = await request.send();
 
       if (response.statusCode == 200) {
@@ -164,4 +164,75 @@ class CartService {
       return false;
     }
   }
+
+  // 4. Tạo đơn hàng (Order)
+  Future<OrderResult> createOrder({
+    required List<int> productIds,
+    required String shippingAddress,
+    String? notes,
+  }) async {
+    const String orderUrl = 'https://coral-interjugal-xochitl.ngrok-free.dev/orders/create';
+
+    try {
+      final headers = await _getHeaders();
+      // Thêm header cho ngrok
+      headers['ngrok-skip-browser-warning'] = 'true';
+
+      final body = jsonEncode({
+        "productIds": productIds,
+        "shippingAddress": shippingAddress,
+        "notes": notes ?? "",
+      });
+
+      print('Order request - URL: $orderUrl');
+      print('Order request - Headers: $headers');
+      print('Order request - Body: $body');
+
+      final response = await http.post(
+        Uri.parse(orderUrl),
+        headers: headers,
+        body: body,
+      );
+
+      print('Order response - Status: ${response.statusCode}');
+      print('Order response - Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return OrderResult(
+          success: true,
+          message: 'Đặt hàng thành công!',
+          orderId: data['orderId']?.toString(),
+          paymentUrl: data['paymentUrl'],
+        );
+      } else {
+        final errorData = jsonDecode(response.body);
+        return OrderResult(
+          success: false,
+          message: errorData['message'] ?? 'Đặt hàng thất bại. Vui lòng thử lại!',
+        );
+      }
+    } catch (e) {
+      print('Lỗi tạo đơn hàng: $e');
+      return OrderResult(
+        success: false,
+        message: 'Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại!',
+      );
+    }
+  }
+}
+
+// Model cho kết quả tạo order
+class OrderResult {
+  final bool success;
+  final String message;
+  final String? orderId;
+  final String? paymentUrl;
+
+  OrderResult({
+    required this.success,
+    required this.message,
+    this.orderId,
+    this.paymentUrl,
+  });
 }

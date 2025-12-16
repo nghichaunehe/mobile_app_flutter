@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 // Giả định bạn có các Models và Services này
-import '/services/cart_service.dart'; 
+import '/services/cart_service.dart';
+import 'url_launcher_helper.dart'; 
 // import 'path/to/models/cart_response.dart'; 
 // import 'path/to/models/cart_item_model.dart'; 
 
@@ -16,9 +17,14 @@ class _CartScreenState extends State<CartScreen> {
   final CartService _cartService = CartService();
   CartResponse? _cartData;
   bool _isLoading = true;
+  bool _isOrdering = false; // Trạng thái đang đặt hàng
 
   // UPDATE 1: Biến lưu các ID của item đang được tick chọn
-  final Set<int> _selectedItemIds = {}; 
+  final Set<int> _selectedItemIds = {};
+
+  // Controllers cho dialog đặt hàng
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController(); 
   
   // UPDATE: Định dạng tiền tệ chính xác (Locale vi_VN, không số thập phân)
   final currencyFormatter = NumberFormat.currency(
@@ -31,6 +37,13 @@ class _CartScreenState extends State<CartScreen> {
   void initState() {
     super.initState();
     _fetchCartData();
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _notesController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchCartData() async {
@@ -134,6 +147,134 @@ class _CartScreenState extends State<CartScreen> {
   bool get _isAllSelected {
     if (_cartData == null || _cartData!.items.isEmpty) return false;
     return _selectedItemIds.length == _cartData!.items.length;
+  }
+
+  // Hiển thị dialog nhập địa chỉ và ghi chú để đặt hàng
+  void _showOrderDialog() {
+    final primaryColor = Theme.of(context).primaryColor;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Thông tin đặt hàng'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _addressController,
+                  decoration: const InputDecoration(
+                    labelText: 'Địa chỉ giao hàng *',
+                    hintText: 'Nhập địa chỉ giao hàng',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Ghi chú',
+                    hintText: 'Ví dụ: Gọi trước 30 phút',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: _isOrdering ? null : () => _submitOrder(context),
+              style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+              child: _isOrdering
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Xác nhận', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Xử lý gọi API đặt hàng
+  Future<void> _submitOrder(BuildContext dialogContext) async {
+    final address = _addressController.text.trim();
+
+    if (address.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập địa chỉ giao hàng!')),
+      );
+      return;
+    }
+
+    setState(() => _isOrdering = true);
+
+    // Lấy danh sách productId từ các item được chọn
+    final List<int> productIds = _cartData!.items
+        .where((item) => _selectedItemIds.contains(item.id))
+        .map((item) => item.id)
+        .toList();
+
+    final result = await _cartService.createOrder(
+      productIds: productIds,
+      shippingAddress: address,
+      notes: _notesController.text.trim(),
+    );
+
+    setState(() => _isOrdering = false);
+
+    // Đóng dialog
+    if (dialogContext.mounted) {
+      Navigator.pop(dialogContext);
+    }
+
+    if (!mounted) return;
+
+    if (result.success && result.paymentUrl != null) {
+      _addressController.clear();
+      _notesController.clear();
+
+      // Mở trình duyệt để thanh toán VNPay
+      final success = await openUrl(result.paymentUrl!);
+
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã mở trang thanh toán cho đơn hàng #${result.orderId}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Refresh lại giỏ hàng
+        _fetchCartData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể mở trang thanh toán'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } else if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -389,9 +530,7 @@ class _CartScreenState extends State<CartScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: ElevatedButton(
-                onPressed: selectedCount == 0 ? null : () { // Disable nếu không chọn gì
-                    // Logic thanh toán: Navigator.push Named... arguments: _selectedItemIds
-                }, 
+                onPressed: selectedCount == 0 ? null : _showOrderDialog, 
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   disabledBackgroundColor: Colors.grey, // Màu khi disable

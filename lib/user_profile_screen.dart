@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'secure_storage_manager.dart';
+import 'orders_screen.dart';
 void main() {
   runApp(const MyApp());
 }
@@ -164,6 +165,12 @@ class UserProfileScreen extends StatelessWidget {
                       text: "Đơn hàng của tôi",
                       iconColor: primaryColor,
                       iconBgColor: primaryColor.withOpacity(0.1),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const OrdersScreen()),
+                        );
+                      },
                     ),
                     _buildDivider(),
                     _buildMenuItem(
