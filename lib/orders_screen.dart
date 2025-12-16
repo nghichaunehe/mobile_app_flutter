@@ -115,13 +115,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () {
-          Navigator.push(
+        onTap: () async {
+          final result = await Navigator.push<bool>(
             context,
             MaterialPageRoute(
               builder: (context) => OrderDetailScreen(order: order),
             ),
           );
+          // Refresh nếu có thay đổi (vd: hủy đơn hàng)
+          if (result == true) {
+            _fetchOrders();
+          }
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(

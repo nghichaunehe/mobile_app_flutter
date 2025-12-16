@@ -74,15 +74,14 @@ class CartService {
   // Hàm lấy Header kèm Token Authorization
   Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token') ?? ''; 
-    
-    // 👇 THÊM DÒNG NÀY ĐỂ DEBUG 👇
-    print("Token đang dùng để gọi API: $token"); 
-    // 👆 NẾU NÓ RỖNG => BẠN CHƯA LƯU TOKEN LÚC LOGIN
-    
+    final token = prefs.getString('access_token') ?? '';
+
+    print("Token đang dùng để gọi API: $token");
+
     return {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
+      'ngrok-skip-browser-warning': 'true',
     };
   }
 
@@ -90,7 +89,10 @@ class CartService {
   Future<CartResponse?> getCart() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(Uri.parse(baseUrl), headers: headers);
+      final response = await http.get(Uri.parse('$baseUrl/cart'), headers: headers);
+
+      print('Cart response - Status: ${response.statusCode}');
+      print('Cart response - Body: ${response.body}');
 
       if (response.statusCode == 200) {
         return CartResponse.fromJson(jsonDecode(response.body));
@@ -114,7 +116,7 @@ class CartService {
     try {
       final headers = await _getHeaders();
       final body = jsonEncode({
-        "userId": "temp", // Backend sẽ override bằng token, nhưng DTO yêu cầu field này
+        "userId": "temp",
         "productId": productId,
         "quantity": quantity,
         "size": size,
@@ -122,7 +124,7 @@ class CartService {
       });
 
       final response = await http.post(
-        Uri.parse('$baseUrl/add'),
+        Uri.parse('$baseUrl/cart/add'),
         headers: headers,
         body: body,
       );
@@ -147,10 +149,7 @@ class CartService {
         "cartItemId": cartItemId
       });
 
-      // API backend dùng @Delete('remove') với @Body,
-      // nhưng chuẩn RESTful DELETE thường không có Body.
-      // Flutter http.delete có hỗ trợ body nhưng cẩn thận server config.
-      final request = http.Request('DELETE', Uri.parse('$baseUrl/remove'));
+      final request = http.Request('DELETE', Uri.parse('$baseUrl/cart/remove'));
       request.headers.addAll(headers);
       request.body = body;
 

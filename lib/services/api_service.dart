@@ -76,26 +76,28 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': 'true',
       },
     );
 
     // 2. Nếu lỗi 401 (Unauthorized) -> Token hết hạn
     if (response.statusCode == 401) {
       print("Token hết hạn (401). Đang thử refresh...");
-      
+
       // 3. Thử lấy token mới
       bool success = await _refreshToken();
 
       if (success) {
         // 4. Lấy lại token mới từ storage
         token = await _getToken('access_token');
-        
+
         // 5. Gọi lại API lần 2 với token mới
         response = await http.get(
           url,
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
+            'ngrok-skip-browser-warning': 'true',
           },
         );
       }
@@ -114,6 +116,7 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': 'true',
       },
       body: jsonEncode(body),
     );
@@ -128,6 +131,7 @@ class ApiService {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
+            'ngrok-skip-browser-warning': 'true',
           },
           body: jsonEncode(body),
         );

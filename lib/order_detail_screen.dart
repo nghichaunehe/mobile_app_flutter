@@ -1,11 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '/services/order_service.dart';
+import 'url_launcher_helper.dart';
 
-class OrderDetailScreen extends StatelessWidget {
+class OrderDetailScreen extends StatefulWidget {
   final OrderModel order;
 
   const OrderDetailScreen({super.key, required this.order});
+
+  @override
+  State<OrderDetailScreen> createState() => _OrderDetailScreenState();
+}
+
+class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  final OrderService _orderService = OrderService();
+  late OrderModel _order;
+  bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _order = widget.order;
+  }
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -26,6 +42,99 @@ class OrderDetailScreen extends StatelessWidget {
     }
   }
 
+  // Xử lý thanh toán
+  Future<void> _handlePayment() async {
+    setState(() => _isProcessing = true);
+
+    final result = await _orderService.getPaymentUrl(_order.id);
+
+    setState(() => _isProcessing = false);
+
+    if (!mounted) return;
+
+    if (result.success && result.paymentUrl != null) {
+      final success = await openUrl(result.paymentUrl!);
+
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.isNew
+                ? 'Đã tạo link thanh toán mới'
+                : 'Đã mở trang thanh toán'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể mở trang thanh toán'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message ?? 'Lỗi lấy link thanh toán'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Xử lý hủy đơn hàng
+  Future<void> _handleCancelOrder() async {
+    // Hiện dialog xác nhận
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hủy đơn hàng'),
+        content: Text('Bạn có chắc muốn hủy đơn hàng #${_order.id}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Không'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Hủy đơn hàng', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isProcessing = true);
+
+    final result = await _orderService.cancelOrder(_order.id);
+
+    setState(() => _isProcessing = false);
+
+    if (!mounted) return;
+
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: Colors.green,
+        ),
+      );
+      // Quay về màn hình danh sách và refresh
+      Navigator.pop(context, true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).primaryColor;
@@ -35,37 +144,117 @@ class OrderDetailScreen extends StatelessWidget {
       decimalDigits: 0,
     );
     final dateFormatter = DateFormat('dd/MM/yyyy HH:mm');
-    final statusColor = _getStatusColor(order.status);
+    final statusColor = _getStatusColor(_order.status);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Đơn hàng #${order.id}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text('Đơn hàng #${_order.id}', style: const TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Status Card
-            _buildStatusCard(statusColor, dateFormatter),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Status Card
+                _buildStatusCard(statusColor, dateFormatter),
 
-            const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-            // Shipping Info Card
-            _buildShippingCard(),
+                // Shipping Info Card
+                _buildShippingCard(),
 
-            const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-            // Products List
-            _buildProductsCard(currencyFormatter, primaryColor),
+                // Products List
+                _buildProductsCard(currencyFormatter, primaryColor),
 
-            const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-            // Order Summary
-            _buildSummaryCard(currencyFormatter, primaryColor),
-          ],
-        ),
+                // Order Summary
+                _buildSummaryCard(currencyFormatter, primaryColor),
+              ],
+            ),
+          ),
+
+          // Bottom Action Buttons (chỉ hiển thị khi PENDING)
+          if (_order.status == 'PENDING')
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildActionButtons(primaryColor),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(Color primaryColor) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Nút Hủy đơn hàng
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _isProcessing ? null : _handleCancelOrder,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text(
+                'Hủy đơn hàng',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Nút Thanh toán
+          Expanded(
+            flex: 2,
+            child: ElevatedButton(
+              onPressed: _isProcessing ? null : _handlePayment,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: _isProcessing
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.payment),
+                        SizedBox(width: 8),
+                        Text(
+                          'Thanh toán ngay',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -89,12 +278,12 @@ class OrderDetailScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
+                    color: statusColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: statusColor, width: 1.5),
                   ),
                   child: Text(
-                    order.statusDisplay,
+                    _order.statusDisplay,
                     style: TextStyle(
                       color: statusColor,
                       fontWeight: FontWeight.bold,
@@ -109,7 +298,7 @@ class OrderDetailScreen extends StatelessWidget {
                 const Icon(Icons.access_time, size: 18, color: Colors.grey),
                 const SizedBox(width: 8),
                 Text(
-                  'Đặt lúc: ${dateFormatter.format(order.createdAt)}',
+                  'Đặt lúc: ${dateFormatter.format(_order.createdAt)}',
                   style: const TextStyle(color: Colors.grey),
                 ),
               ],
@@ -147,13 +336,13 @@ class OrderDetailScreen extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    order.shippingAddress,
+                    _order.shippingAddress,
                     style: const TextStyle(fontSize: 14),
                   ),
                 ),
               ],
             ),
-            if (order.notes != null && order.notes!.isNotEmpty) ...[
+            if (_order.notes != null && _order.notes!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,7 +351,7 @@ class OrderDetailScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      order.notes!,
+                      _order.notes!,
                       style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                   ),
@@ -189,13 +378,13 @@ class OrderDetailScreen extends StatelessWidget {
                 const Icon(Icons.shopping_bag_outlined, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'Sản phẩm (${order.items.length})',
+                  'Sản phẩm (${_order.items.length})',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            ...order.items.map((item) => _buildProductItem(item, currencyFormatter, primaryColor)),
+            ..._order.items.map((item) => _buildProductItem(item, currencyFormatter, primaryColor)),
           ],
         ),
       ),
@@ -303,7 +492,7 @@ class OrderDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _buildSummaryRow(
               'Tổng số lượng',
-              '${order.totalQuantity} sản phẩm',
+              '${_order.totalQuantity} sản phẩm',
             ),
             const SizedBox(height: 8),
             _buildSummaryRow(
@@ -317,7 +506,7 @@ class OrderDetailScreen extends StatelessWidget {
             ),
             _buildSummaryRow(
               'Tổng thanh toán',
-              currencyFormatter.format(double.parse(order.totalPrice)),
+              currencyFormatter.format(double.parse(_order.totalPrice)),
               isTotal: true,
               valueColor: primaryColor,
             ),
