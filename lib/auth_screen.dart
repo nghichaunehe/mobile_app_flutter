@@ -22,7 +22,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
 
-  final String _baseUrl = "http://localhost:3001"; 
+  final String _baseUrl = "https://coral-interjugal-xochitl.ngrok-free.dev"; 
 
   Future<void> _handleAuth() async {
     FocusScope.of(context).unfocus();

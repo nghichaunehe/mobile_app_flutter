@@ -69,7 +69,7 @@ class CartResponse {
 
 class CartService {
   // Thay đổi IP này tùy môi trường (Android Emulator dùng 10.0.2.2, iOS dùng localhost)
-  static const String baseUrl = 'http://localhost:3001/cart'; 
+  static const String baseUrl = 'https://coral-interjugal-xochitl.ngrok-free.dev'; 
 
   // Hàm lấy Header kèm Token Authorization
   Future<Map<String, String>> _getHeaders() async {

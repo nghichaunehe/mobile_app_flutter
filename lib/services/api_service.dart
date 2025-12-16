@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   // Đổi localhost thành IP máy tính nếu chạy trên Android Emulator (VD: 10.0.2.2)
-  final String baseUrl = "http://localhost:3001"; 
+  final String baseUrl = "https://coral-interjugal-xochitl.ngrok-free.dev"; 
 
   // Hàm lấy token từ bộ nhớ
   Future<String?> _getToken(String key) async {

@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http; // Import thư viện HTTP
 // !!! CẬP NHẬT URL API !!!
 // Thay đổi port nếu bạn dùng NestJS (thường là 3000) hoặc Dart Frog (thường là 8080).
 // Dùng http://10.0.2.2:8080 nếu chạy trên Android Emulator.
-const String API_BASE_URL = "http://localhost:3001"; 
+const String API_BASE_URL = "https://coral-interjugal-xochitl.ngrok-free.dev"; 
 
 // Chuyển từ StatelessWidget sang StatefulWidget để quản lý trạng thái form và lựa chọn
 class CheckoutScreen extends StatefulWidget {
