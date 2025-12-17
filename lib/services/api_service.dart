@@ -139,4 +139,72 @@ class ApiService {
     }
     return response;
   }
+
+  // Hàm PATCH có cơ chế refresh token tương tự GET/POST
+  Future<http.Response> patch(String endpoint, Map<String, dynamic> body) async {
+    String? token = await _getToken('access_token');
+    final url = Uri.parse('$baseUrl$endpoint');
+
+    var response = await http.patch(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode == 401) {
+      print("Token hết hạn (401). Đang thử refresh...");
+      bool success = await _refreshToken();
+      if (success) {
+        token = await _getToken('access_token');
+        response = await http.patch(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+            'ngrok-skip-browser-warning': 'true',
+          },
+          body: jsonEncode(body),
+        );
+      }
+    }
+
+    return response;
+  }
+
+  // Hàm DELETE có cơ chế refresh token
+  Future<http.Response> delete(String endpoint) async {
+    String? token = await _getToken('access_token');
+    final url = Uri.parse('$baseUrl$endpoint');
+
+    var response = await http.delete(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': 'true',
+      },
+    );
+
+    if (response.statusCode == 401) {
+      print("Token hết hạn (401). Đang thử refresh...");
+      bool success = await _refreshToken();
+      if (success) {
+        token = await _getToken('access_token');
+        response = await http.delete(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+            'ngrok-skip-browser-warning': 'true',
+          },
+        );
+      }
+    }
+
+    return response;
+  }
 }

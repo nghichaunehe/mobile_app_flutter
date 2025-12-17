@@ -64,13 +64,15 @@ class _AuthScreenState extends State<AuthScreen> {
           await prefs.setString('access_token', token);
           print("Đã lưu Token: $token");
         }
-        
-        if (responseData['userId'] != null) {
-           await prefs.setString('userId', responseData['userId'].toString());
+
+        if (refreshToken != null) {
+          await prefs.setString('refresh_token', refreshToken);
+          print("Đã lưu Refresh Token: $refreshToken");
         }
 
-        if (responseData['userId'] != null) {
-          await prefs.setString('userId', responseData['userId'].toString());
+        final userId = responseData['userId']?.toString();
+        if (userId != null) {
+          await prefs.setString('userId', userId);
         }
 
         if (mounted) {

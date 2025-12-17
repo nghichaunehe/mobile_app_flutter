@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 // Giả định bạn có các Models và Services này
 import '/services/cart_service.dart';
+import '/services/api_service.dart';
 import 'url_launcher_helper.dart'; 
+import 'secure_storage_manager.dart';
 // import 'path/to/models/cart_response.dart'; 
 // import 'path/to/models/cart_item_model.dart'; 
 
@@ -15,15 +18,24 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   final CartService _cartService = CartService();
+  final ApiService _apiService = ApiService();
   CartResponse? _cartData;
   bool _isLoading = true;
   bool _isOrdering = false; // Trạng thái đang đặt hàng
+  bool _isLoadingAddresses = false;
 
   // UPDATE 1: Biến lưu các ID của item đang được tick chọn
   final Set<int> _selectedItemIds = {};
 
+  // Danh sách địa chỉ và quản lý lựa chọn
+  List<ShippingAddressModel> _shippingAddresses = [];
+  ShippingAddressModel? _selectedAddress;
+  bool _useCustomAddress = false;
+
   // Controllers cho dialog đặt hàng
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _recipientController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _notesController = TextEditingController(); 
   
   // UPDATE: Định dạng tiền tệ chính xác (Locale vi_VN, không số thập phân)
@@ -42,6 +54,8 @@ class _CartScreenState extends State<CartScreen> {
   @override
   void dispose() {
     _addressController.dispose();
+    _recipientController.dispose();
+    _phoneController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -127,6 +141,114 @@ class _CartScreenState extends State<CartScreen> {
     // Nếu thành công thì không cần fetch lại toàn bộ mà giữ nguyên state đã xóa.
   }
 
+  Future<void> _loadShippingAddresses() async {
+    setState(() {
+      _isLoadingAddresses = true;
+    });
+
+    try {
+      final response = await _apiService.get('/user/me/addresses');
+
+      if (!mounted) {
+        return;
+      }
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List<dynamic>;
+        final addresses = data.map((e) => ShippingAddressModel.fromJson(e)).toList();
+
+        ShippingAddressModel? defaultAddress;
+        if (addresses.isNotEmpty) {
+          defaultAddress = addresses.firstWhere(
+            (a) => a.isDefault,
+            orElse: () => addresses.first,
+          );
+        }
+
+        setState(() {
+          _shippingAddresses = addresses;
+          _isLoadingAddresses = false;
+        });
+
+        if (defaultAddress != null) {
+          _selectAddress(defaultAddress, notify: false);
+        } else {
+          setState(() {
+            _selectedAddress = null;
+            _useCustomAddress = true;
+          });
+          _addressController.clear();
+          _recipientController.clear();
+          _phoneController.clear();
+        }
+      } else if (response.statusCode == 401) {
+        setState(() {
+          _isLoadingAddresses = false;
+        });
+        await _handleUnauthorized();
+      } else {
+        setState(() {
+          _isLoadingAddresses = false;
+        });
+        _showSnack('Không tải được danh sách địa chỉ');
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingAddresses = false;
+      });
+      _showSnack('Lỗi tải địa chỉ: $e');
+    }
+  }
+
+  // Cập nhật controller khi chọn địa chỉ
+  void _selectAddress(ShippingAddressModel? address, {bool notify = true}) {
+    void applySelection() {
+      _selectedAddress = address;
+      if (address != null) {
+        _useCustomAddress = false;
+        _addressController.text = address.address;
+        _recipientController.text = address.recipientName;
+        _phoneController.text = address.phone;
+      } else {
+        _selectedAddress = null;
+        _useCustomAddress = true;
+        _addressController.clear();
+        _recipientController.clear();
+        _phoneController.clear();
+      }
+    }
+
+    if (notify) {
+      setState(applySelection);
+    } else {
+      applySelection();
+    }
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _handleUnauthorized() async {
+    await _apiService.logout();
+    await SecureStorageManager.deleteJwt();
+
+    if (!mounted) {
+      return;
+    }
+
+    _showSnack('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.');
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+  }
+
   // Logic Checkbox "Chọn tất cả"
   void _toggleSelectAll(bool? value) {
     setState(() {
@@ -150,58 +272,148 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   // Hiển thị dialog nhập địa chỉ và ghi chú để đặt hàng
-  void _showOrderDialog() {
+  Future<void> _showOrderDialog() async {
     final primaryColor = Theme.of(context).primaryColor;
+
+    await _loadShippingAddresses();
+
+    if (!mounted) {
+      return;
+    }
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Thông tin đặt hàng'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _addressController,
-                  decoration: const InputDecoration(
-                    labelText: 'Địa chỉ giao hàng *',
-                    hintText: 'Nhập địa chỉ giao hàng',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 2,
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return AlertDialog(
+              title: const Text('Thông tin đặt hàng'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Hiển thị danh sách địa chỉ đã lưu
+                    if (_shippingAddresses.isNotEmpty) ...[
+                      const Text('Địa chỉ đã lưu:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      _isLoadingAddresses
+                          ? const SizedBox(
+                              height: 40,
+                              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            )
+                          : Column(
+                              children: _shippingAddresses.map((addr) {
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  child: RadioListTile<ShippingAddressModel>(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(addr.address, style: const TextStyle(fontSize: 13)),
+                                    subtitle: Text('${addr.recipientName} | ${addr.phone}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                    value: addr,
+                                    groupValue: _useCustomAddress ? null : _selectedAddress,
+                                    onChanged: (val) {
+                                      setModalState(() => _selectAddress(val));
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                      const SizedBox(height: 12),
+                      Divider(color: Colors.grey[300]),
+                      const SizedBox(height: 12),
+                    ] else
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: Text('Chưa có địa chỉ đã lưu', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      ),
+                    // Toggle nhập địa chỉ tùy chỉnh
+                    if (_shippingAddresses.isNotEmpty)
+                      CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Nhập địa chỉ khác', style: TextStyle(fontSize: 13)),
+                        value: _useCustomAddress,
+                        onChanged: (val) {
+                          setModalState(() {
+                            _useCustomAddress = val ?? false;
+                            if (_useCustomAddress) {
+                              _addressController.clear();
+                              _recipientController.clear();
+                              _phoneController.clear();
+                            }
+                          });
+                        },
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    const SizedBox(height: 12),
+                    // Hiển thị fields nhập khi chọn custom hoặc không có địa chỉ lưu
+                    if (_useCustomAddress || _shippingAddresses.isEmpty) ...[
+                      TextField(
+                        controller: _addressController,
+                        decoration: const InputDecoration(
+                          labelText: 'Địa chỉ giao hàng *',
+                          hintText: 'Nhập địa chỉ giao hàng',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _recipientController,
+                        decoration: const InputDecoration(
+                          labelText: 'Tên người nhận (tùy chọn)',
+                          hintText: 'Ví dụ: Nguyễn Văn A',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _phoneController,
+                        decoration: const InputDecoration(
+                          labelText: 'Số điện thoại (tùy chọn)',
+                          hintText: 'Ví dụ: 090...',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    // Ghi chú (luôn hiển thị)
+                    TextField(
+                      controller: _notesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Ghi chú',
+                        hintText: 'Ví dụ: Gọi trước 30 phút',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 2,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _notesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Ghi chú',
-                    hintText: 'Ví dụ: Gọi trước 30 phút',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 2,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Hủy'),
+                ),
+                ElevatedButton(
+                  onPressed: _isOrdering ? null : () => _submitOrder(context),
+                  style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+                  child: _isOrdering
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Xác nhận', style: TextStyle(color: Colors.white)),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Hủy'),
-            ),
-            ElevatedButton(
-              onPressed: _isOrdering ? null : () => _submitOrder(context),
-              style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-              child: _isOrdering
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('Xác nhận', style: TextStyle(color: Colors.white)),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -213,7 +425,7 @@ class _CartScreenState extends State<CartScreen> {
 
     if (address.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập địa chỉ giao hàng!')),
+        const SnackBar(content: Text('Vui lòng nhập hoặc chọn địa chỉ giao hàng!')),
       );
       return;
     }
@@ -226,9 +438,13 @@ class _CartScreenState extends State<CartScreen> {
         .map((item) => item.id)
         .toList();
 
+    // Chuẩn bị dữ liệu để tạo đơn
     final result = await _cartService.createOrder(
       productIds: productIds,
       shippingAddress: address,
+      recipientName: _recipientController.text.trim().isNotEmpty ? _recipientController.text.trim() : null,
+      phone: _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : null,
+      shippingAddressId: !_useCustomAddress && _selectedAddress != null ? _selectedAddress!.id : null,
       notes: _notesController.text.trim(),
     );
 
@@ -243,7 +459,11 @@ class _CartScreenState extends State<CartScreen> {
 
     if (result.success && result.paymentUrl != null) {
       _addressController.clear();
+      _recipientController.clear();
+      _phoneController.clear();
       _notesController.clear();
+      _selectedAddress = null;
+      _useCustomAddress = false;
 
       // Mở trình duyệt để thanh toán VNPay
       final success = await openUrl(result.paymentUrl!);

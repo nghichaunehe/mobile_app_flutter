@@ -48,6 +48,32 @@ class ProductModel {
   }
 }
 
+class ShippingAddressModel {
+  final String id;
+  final String address;
+  final String recipientName;
+  final String phone;
+  final bool isDefault;
+
+  ShippingAddressModel({
+    required this.id,
+    required this.address,
+    required this.recipientName,
+    required this.phone,
+    required this.isDefault,
+  });
+
+  factory ShippingAddressModel.fromJson(Map<String, dynamic> json) {
+    return ShippingAddressModel(
+      id: json['id']?.toString() ?? '',
+      address: json['address'] ?? '',
+      recipientName: json['recipientName'] ?? '',
+      phone: json['phone'] ?? '',
+      isDefault: json['isDefault'] ?? false,
+    );
+  }
+}
+
 class CartResponse {
   final List<CartItemModel> items;
   final double totalPrice;
@@ -103,6 +129,23 @@ class CartService {
     } catch (e) {
       print('Lỗi kết nối: $e');
       return null;
+    }
+  }
+
+  // Lấy danh sách địa chỉ giao hàng của user
+  Future<List<ShippingAddressModel>> getShippingAddresses() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(Uri.parse('$baseUrl/user/me/addresses'), headers: headers);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List<dynamic>;
+        return data.map((e) => ShippingAddressModel.fromJson(e)).toList();
+      }
+      return [];
+    } catch (e) {
+      print('Lỗi lấy địa chỉ: $e');
+      return [];
     }
   }
 
@@ -168,6 +211,9 @@ class CartService {
   Future<OrderResult> createOrder({
     required List<int> productIds,
     required String shippingAddress,
+    String? recipientName,
+    String? phone,
+    String? shippingAddressId,
     String? notes,
   }) async {
     const String orderUrl = 'https://coral-interjugal-xochitl.ngrok-free.dev/orders/create';
@@ -180,8 +226,11 @@ class CartService {
       final body = jsonEncode({
         "productIds": productIds,
         "shippingAddress": shippingAddress,
+        "recipientName": recipientName,
+        "phone": phone,
+        "shippingAddressId": shippingAddressId,
         "notes": notes ?? "",
-      });
+      }..removeWhere((key, value) => value == null));
 
       print('Order request - URL: $orderUrl');
       print('Order request - Headers: $headers');
