@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert'; // Dùng để encode/decode JSON
 import 'package:http/http.dart' as http; // Import thư viện HTTP
+import 'payment_webview_screen.dart'; // Import màn hình webview thanh toán
 
 // !!! CẬP NHẬT URL API !!!
 // Thay đổi port nếu bạn dùng NestJS (thường là 3000) hoặc Dart Frog (thường là 8080).
@@ -81,6 +82,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
 
       if (success) {
+        // Nếu thanh toán bằng thẻ, mở webview thanh toán
+        if (_selectedPaymentMethod == 'CARD' && responseData['payment_url'] != null) {
+          final paymentUrl = responseData['payment_url'];
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PaymentWebviewScreen(paymentUrl: paymentUrl),
+            ),
+          );
+        }
         // Chuyển hướng đến màn hình xác nhận sau khi đặt hàng thành công
         // Navigator.pushNamedAndRemoveUntil(context, '/confirmation', (route) => false);
       }

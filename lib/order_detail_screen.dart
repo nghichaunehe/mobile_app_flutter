@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '/services/order_service.dart';
-import 'url_launcher_helper.dart';
+import 'payment_webview_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final OrderModel order;
@@ -53,27 +53,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (!mounted) return;
 
     if (result.success && result.paymentUrl != null) {
-      final success = await openUrl(result.paymentUrl!);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PaymentWebviewScreen(paymentUrl: result.paymentUrl!),
+        ),
+      );
 
       if (!mounted) return;
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.isNew
-                ? 'Đã tạo link thanh toán mới'
-                : 'Đã mở trang thanh toán'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Không thể mở trang thanh toán'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.isNew
+              ? 'Đã tạo link thanh toán mới'
+              : 'Đang mở trang thanh toán'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

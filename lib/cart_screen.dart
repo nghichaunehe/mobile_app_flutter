@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 // Giả định bạn có các Models và Services này
 import '/services/cart_service.dart';
 import '/services/api_service.dart';
-import 'url_launcher_helper.dart'; 
+import 'payment_webview_screen.dart'; 
 import 'secure_storage_manager.dart';
 // import 'path/to/models/cart_response.dart'; 
 // import 'path/to/models/cart_item_model.dart'; 
@@ -465,28 +465,25 @@ class _CartScreenState extends State<CartScreen> {
       _selectedAddress = null;
       _useCustomAddress = false;
 
-      // Mở trình duyệt để thanh toán VNPay
-      final success = await openUrl(result.paymentUrl!);
+      // Mở webview để thanh toán VNPay
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PaymentWebviewScreen(paymentUrl: result.paymentUrl!),
+        ),
+      );
 
       if (!mounted) return;
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đã mở trang thanh toán cho đơn hàng #${result.orderId}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        // Refresh lại giỏ hàng
-        _fetchCartData();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Không thể mở trang thanh toán'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã tạo đơn hàng #${result.orderId}'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+      // Refresh lại giỏ hàng
+      _fetchCartData();
     } else if (!result.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
