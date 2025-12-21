@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'home_screen.dart';
 import 'services/cart_service.dart';
+import 'services/favorite_service.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   const ProductDetailScreen({super.key});
@@ -15,7 +16,54 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   String? _selectedSize;
   String? _selectedColor;
   final CartService _cartService = CartService();
+  final FavoriteService _favoriteService = FavoriteService();
   bool _isAdding = false;
+  bool _isFavorite = false;
+  bool _isTogglingFavorite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkFavoriteStatus();
+    });
+  }
+
+  Future<void> _checkFavoriteStatus() async {
+    final product = ModalRoute.of(context)!.settings.arguments as Product;
+    final isFav = await _favoriteService.isFavorite(product.id);
+    if (mounted) {
+      setState(() => _isFavorite = isFav);
+    }
+  }
+
+  Future<void> _toggleFavorite(int productId) async {
+    setState(() => _isTogglingFavorite = true);
+    
+    final result = _isFavorite
+        ? await _favoriteService.removeFromFavorites(productId)
+        : await _favoriteService.addToFavorites(productId);
+    
+    setState(() => _isTogglingFavorite = false);
+    
+    if (result.success && mounted) {
+      setState(() => _isFavorite = !_isFavorite);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (!result.success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // 1. LẤY DỮ LIỆU ĐƯỢC TRUYỀN TỪ HOME SANG
@@ -37,9 +85,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 pinned: true,
                 backgroundColor: Colors.white,
                 flexibleSpace: FlexibleSpaceBar(
-                  background: product.imageBase64.startsWith('http')
+                  background: product.imageUrl.startsWith('http')
                       ? Image.network(
-                          product.imageBase64,
+                          product.imageUrl,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(color: Colors.grey[200]),
                         )
@@ -57,13 +105,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                    Container(
                     margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
                     decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                    child: IconButton(
-                      icon: Icon(
-                        product.isFavorite ? Icons.favorite : Icons.favorite_border,
-                        color: product.isFavorite ? Colors.red : Colors.black
-                      ),
-                      onPressed: () {}, // Xử lý logic yêu thích sau
-                    ),
+                    child: _isTogglingFavorite
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            icon: Icon(
+                              _isFavorite ? Icons.favorite : Icons.favorite_border,
+                              color: _isFavorite ? Colors.red : Colors.black
+                            ),
+                            onPressed: () => _toggleFavorite(product.id),
+                          ),
                   ),
                 ],
               ),
@@ -102,9 +159,32 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       
                       const SizedBox(height: 8),
                       // Giá tiền
-                      Text(
-                        formattedPrice,
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
+                      Row(
+                        children: [
+                          Text(
+                            formattedPrice,
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
+                          ),
+                          const SizedBox(width: 12),
+                          if (product.isSoldOut == true)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text('HẾT HÀNG', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                            )
+                          else if (product.quantity != null && product.quantity! > 0 && product.quantity! <= 10)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.orange,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text('Chỉ còn ${product.quantity}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                        ],
                       ),
 
                       const SizedBox(height: 24),
@@ -175,7 +255,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -5))],
@@ -196,7 +276,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _isAdding ? null : () async { // Disable nút khi đang loading
+                        onPressed: (_isAdding || (product.isSoldOut == true)) ? null : () async { // Disable nút khi đang loading hoặc hết hàng
                           if (_selectedSize == null || _selectedColor == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text("Vui lòng chọn Size và Màu sắc")),
@@ -239,7 +319,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                         child: _isAdding 
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text("Thêm vào giỏ hàng", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                          : Text(
+                              (product.isSoldOut == true) ? "HẾT HÀNG" : "Thêm vào giỏ hàng",
+                              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
+                            ),
                       ),
                     ),
                   ],

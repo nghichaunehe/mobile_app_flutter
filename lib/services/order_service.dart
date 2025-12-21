@@ -52,6 +52,8 @@ class OrderModel {
         return 'Đang xử lý';
       case 'SHIPPING':
         return 'Đang giao hàng';
+      case 'DELIVERED':
+        return 'Đã giao hàng';
       case 'COMPLETED':
         return 'Hoàn thành';
       case 'CANCELLED':
@@ -89,15 +91,19 @@ class OrderProductModel {
   final int id;
   final String name;
   final dynamic price;
-  final String? imageBase64;
+  final String? imageUrl;
   final String? description;
+  final int? quantity;
+  final bool? isSoldOut;
 
   OrderProductModel({
     required this.id,
     required this.name,
     required this.price,
-    this.imageBase64,
+    this.imageUrl,
     this.description,
+    this.quantity,
+    this.isSoldOut,
   });
 
   factory OrderProductModel.fromJson(Map<String, dynamic> json) {
@@ -105,8 +111,10 @@ class OrderProductModel {
       id: json['id'],
       name: json['name'] ?? '',
       price: json['price'] ?? 0,
-      imageBase64: json['imageBase64'],
+      imageUrl: json['imageUrl'],
       description: json['description'],
+      quantity: json['quantity'],
+      isSoldOut: json['isSoldOut'],
     );
   }
 }

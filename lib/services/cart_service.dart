@@ -34,16 +34,16 @@ class ProductModel {
   final int id;
   final String name;
   final dynamic price; // Có thể là int hoặc string từ BE
-  final String? imageBase64; // Giả sử BE trả về field này hoặc url
+  final String? imageUrl; // URL ảnh từ BE
 
-  ProductModel({required this.id, required this.name, required this.price, this.imageBase64});
+  ProductModel({required this.id, required this.name, required this.price, this.imageUrl});
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
     return ProductModel(
       id: json['id'],
       name: json['name'] ?? '',
       price: json['price'] ?? 0,
-      imageBase64: json['imageBase64'] ?? json['imageUrl'] ?? '', // Map tùy theo response thực tế
+      imageUrl: json['imageUrl'] ?? '', // Map từ response API
     );
   }
 }

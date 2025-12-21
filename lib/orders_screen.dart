@@ -269,9 +269,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Widget _buildProductThumbnail(OrderItemModel item) {
     Widget imageWidget;
-    if (item.product.imageBase64 != null && item.product.imageBase64!.startsWith('http')) {
+    if (item.product.imageUrl != null && item.product.imageUrl!.startsWith('http')) {
       imageWidget = Image.network(
-        item.product.imageBase64!,
+        item.product.imageUrl!,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) =>
             const Icon(Icons.image, size: 24, color: Colors.grey),

@@ -33,6 +33,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return Colors.purple;
       case 'SHIPPING':
         return Colors.indigo;
+      case 'DELIVERED':
+        return Colors.teal;
       case 'COMPLETED':
         return Colors.green;
       case 'CANCELLED':
@@ -389,9 +391,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _buildProductItem(OrderItemModel item, NumberFormat currencyFormatter, Color primaryColor) {
     Widget imageWidget;
-    if (item.product.imageBase64 != null && item.product.imageBase64!.startsWith('http')) {
+    if (item.product.imageUrl != null && item.product.imageUrl!.startsWith('http')) {
       imageWidget = Image.network(
-        item.product.imageBase64!,
+        item.product.imageUrl!,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) =>
             const Icon(Icons.image, size: 30, color: Colors.grey),
@@ -413,15 +415,60 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Product Image
-          Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.grey[200],
-            ),
-            clipBehavior: Clip.hardEdge,
-            child: imageWidget,
+          Stack(
+            children: [
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.grey[200],
+                ),
+                clipBehavior: Clip.hardEdge,
+                child: imageWidget,
+              ),
+              // Badge trạng thái sản phẩm
+              if (item.product.isSoldOut == true)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'HẾT',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                )
+              else if (item.product.quantity != null && item.product.quantity! > 0 && item.product.quantity! <= 10)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '${item.product.quantity}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 12),
           // Product Info

@@ -249,6 +249,61 @@ class _CartScreenState extends State<CartScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
+  Future<void> _checkOrderStatus(dynamic orderId) async {
+    if (orderId == null) {
+      _showSnack('Không thể kiểm tra trạng thái đơn hàng.');
+      return;
+    }
+
+    try {
+      final response = await _apiService.get('/orders/$orderId');
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final String status = data['status'] ?? '';
+
+        // Refresh lại giỏ hàng
+        await _fetchCartData();
+
+        if (!mounted) return;
+
+        if (status == 'COMPLETED') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🎉 Chúc mừng! Đơn hàng của bạn đã được thanh toán thành công!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else if (status == 'PENDING') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Đơn hàng #$orderId đang chờ xử lý'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Trạng thái đơn hàng: $status'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else if (response.statusCode == 401) {
+        await _handleUnauthorized();
+      } else {
+        _showSnack('Không thể kiểm tra trạng thái đơn hàng.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Lỗi khi kiểm tra đơn hàng: $e');
+    }
+  }
+
   // Logic Checkbox "Chọn tất cả"
   void _toggleSelectAll(bool? value) {
     setState(() {
@@ -465,8 +520,8 @@ class _CartScreenState extends State<CartScreen> {
       _selectedAddress = null;
       _useCustomAddress = false;
 
-      // Mở webview để thanh toán VNPay
-      Navigator.push(
+      // Mở webview để thanh toán VNPay và đợi khi popup đóng
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => PaymentWebviewScreen(paymentUrl: result.paymentUrl!),
@@ -475,15 +530,8 @@ class _CartScreenState extends State<CartScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Đã tạo đơn hàng #${result.orderId}'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      
-      // Refresh lại giỏ hàng
-      _fetchCartData();
+      // Sau khi popup đóng, gọi API kiểm tra trạng thái đơn hàng
+      await _checkOrderStatus(result.orderId);
     } else if (!result.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -583,9 +631,9 @@ class _CartScreenState extends State<CartScreen> {
       Color primaryColor) {
 
     Widget imageWidget;
-    if (item.product.imageBase64 != null && item.product.imageBase64!.startsWith('http')) {
+    if (item.product.imageUrl != null && item.product.imageUrl!.startsWith('http')) {
        imageWidget = Image.network(
-         item.product.imageBase64!, 
+         item.product.imageUrl!, 
          fit: BoxFit.cover,
          errorBuilder: (context, error, stackTrace) => const Icon(Icons.image, size: 40, color: Colors.grey),
        );
