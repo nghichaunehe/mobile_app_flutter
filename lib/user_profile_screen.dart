@@ -843,6 +843,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           builder: (ctx, setModalState) {
             // -- Logic handlers (Giữ nguyên logic cũ) --
             void handleProvinceChange(String value) {
+              if (!ctx.mounted) return;
+              
               if (selectedProvinceCode.isNotEmpty) {
                 // Logic reset nếu người dùng sửa text đã chọn
                 _Province? currentProvince;
@@ -859,24 +861,31 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   selectedWardCode = '';
                   districtController.clear();
                   wardController.clear();
-                  setState(() {
-                    _districts = [];
-                    _districtError = null;
-                    _isLoadingDistricts = false;
-                    _wards = [];
-                    _wardError = null;
-                    _isLoadingWards = false;
-                  });
+                  if (mounted) {
+                    setState(() {
+                      _districts = [];
+                      _districtError = null;
+                      _isLoadingDistricts = false;
+                      _wards = [];
+                      _wardError = null;
+                      _isLoadingWards = false;
+                    });
+                  }
                 }
               }
-              setModalState(() {
-                provinceSuggestions = filterProvinceSuggestions(value);
-                districtSuggestions = [];
-                wardSuggestions = [];
-              });
+              
+              if (ctx.mounted) {
+                setModalState(() {
+                  provinceSuggestions = filterProvinceSuggestions(value);
+                  districtSuggestions = [];
+                  wardSuggestions = [];
+                });
+              }
             }
 
             void handleDistrictChange(String value) {
+              if (!ctx.mounted) return;
+              
               if (selectedDistrictCode.isNotEmpty) {
                 _District? currentDistrict;
                 for (final district in _districts) {
@@ -890,20 +899,27 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   selectedDistrictCode = '';
                   selectedWardCode = '';
                   wardController.clear();
-                  setState(() {
-                    _wards = [];
-                    _wardError = null;
-                    _isLoadingWards = false;
-                  });
+                  if (mounted) {
+                    setState(() {
+                      _wards = [];
+                      _wardError = null;
+                      _isLoadingWards = false;
+                    });
+                  }
                 }
               }
-              setModalState(() {
-                districtSuggestions = filterDistrictSuggestions(value);
-                wardSuggestions = [];
-              });
+              
+              if (ctx.mounted) {
+                setModalState(() {
+                  districtSuggestions = filterDistrictSuggestions(value);
+                  wardSuggestions = [];
+                });
+              }
             }
 
             void handleWardChange(String value) {
+              if (!ctx.mounted) return;
+              
               if (selectedWardCode.isNotEmpty) {
                 _Ward? currentWard;
                 for (final ward in _wards) {
@@ -917,9 +933,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   selectedWardCode = '';
                 }
               }
-              setModalState(() {
-                wardSuggestions = filterWardSuggestions(value);
-              });
+              
+              if (ctx.mounted) {
+                setModalState(() {
+                  wardSuggestions = filterWardSuggestions(value);
+                });
+              }
             }
 
             // -- UI Components Helper --
